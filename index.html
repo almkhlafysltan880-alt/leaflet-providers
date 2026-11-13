@@ -1,118 +1,287 @@
-<!doctype html>
-<html lang="en">
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
 <head>
-	<title>Leaflet Provider Demo</title>
-	<meta charset="utf-8" />
-	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
-	<!-- Leaflet style. REQUIRED! -->
-	<link rel="stylesheet" href="https://unpkg.com/leaflet@latest/dist/leaflet.css" />
-	<style>
-		html { height: 100% }
-		body { height: 100%; margin: 0; padding: 0;}
-		.map { height: 100% }
-	</style>
-	<!--Fork Me on Github ribbon, we're using the awesome version from simonwhitaker available at https://github.com/simonwhitaker/github-fork-ribbon-css  -->
-	<link rel="stylesheet" href="css/gh-fork-ribbon.css" />
-	<!--[if IE]>
-		<link rel="stylesheet" href="css/gh-fork-ribbon.ie.css" />
-	<![endif]-->
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>شبكة المحيط نت الفضائية - خريطة المراقبة الحية</title>
+    <!-- مكتبة Leaflet للخرائط -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        body { margin: 0; padding: 0; font-family: Tahoma, sans-serif; background-color: #0f172a; color: #fff; overflow: hidden; }
+        #map { width: 100%; height: 100vh; }
+        
+        /* لوحة الإحصائيات العلوية */
+        .top-dashboard {
+            position: absolute; top: 15px; left: 50%; transform: translateX(-50%);
+            z-index: 1000; background: rgba(15, 23, 42, 0.92); backdrop-filter: blur(8px);
+            padding: 12px 18px; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+            display: flex; flex-direction: column; gap: 10px; width: 92%; max-width: 460px;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        .dash-header { display: flex; justify-content: space-between; align-items: center; font-size: 13px; font-weight: bold; color: #e2e8f0; }
+        .live-badge { background: rgba(34, 197, 94, 0.2); color: #22c55e; padding: 3px 10px; border-radius: 20px; display: flex; align-items: center; gap: 5px; font-size: 12px; }
+        .live-dot { width: 8px; height: 8px; background-color: #22c55e; border-radius: 50%; animation: pulse 1.5s infinite; }
+        
+        /* العدادات التفاعلية */
+        .counters-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; text-align: center; }
+        .counter-box {
+            background: rgba(30, 41, 59, 0.7); padding: 8px 4px; border-radius: 10px;
+            border: 1px solid rgba(255,255,255,0.05); cursor: pointer; transition: all 0.2s;
+        }
+        .counter-box:hover { background: rgba(51, 65, 85, 0.9); transform: translateY(-1px); }
+        .counter-box.active-filter { border-color: #3b82f6; background: rgba(59, 130, 246, 0.2); }
+        .counter-num { font-size: 16px; font-weight: bold; margin-bottom: 2px; }
+        .counter-label { font-size: 11px; color: #94a3b8; }
+
+        /* شريط البحث */
+        .search-box {
+            display: flex; gap: 6px;
+        }
+        .search-input {
+            width: 100%; background: rgba(30, 41, 59, 0.9); border: 1px solid rgba(255,255,255,0.1);
+            color: #fff; padding: 7px 12px; border-radius: 10px; font-family: Tahoma, sans-serif;
+            font-size: 12px; outline: none;
+        }
+        .search-input::placeholder { color: #64748b; }
+        .search-input:focus { border-color: #3b82f6; }
+        
+        /* لوحة التحكم السفلية */
+        .bottom-panel {
+            position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+            z-index: 1000; background: rgba(15, 23, 42, 0.92); backdrop-filter: blur(8px);
+            padding: 10px 18px; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+            display: flex; align-items: center; gap: 15px; border: 1px solid rgba(255,255,255,0.1);
+            white-space: nowrap;
+        }
+        .update-btn {
+            background: #3b82f6; color: white; border: none; padding: 8px 14px;
+            border-radius: 10px; font-weight: bold; font-size: 12px; cursor: pointer;
+            display: flex; align-items: center; gap: 6px; transition: background 0.3s;
+        }
+        .update-btn:hover { background: #2563eb; }
+        .update-btn.spinning svg { animation: spin 0.8s linear infinite; }
+        .footer-credit { font-size: 12px; color: #94a3b8; }
+
+        /* إشعار التحديث العائم */
+        .toast {
+            position: absolute; bottom: 80px; left: 50%; transform: translateX(-50%);
+            z-index: 1001; background: rgba(34, 197, 94, 0.95); color: #fff;
+            padding: 6px 16px; border-radius: 20px; font-size: 12px; font-weight: bold;
+            opacity: 0; pointer-events: none; transition: opacity 0.3s;
+        }
+        .toast.show { opacity: 1; }
+
+        /* تنسيق النقاط على الخريطة */
+        .modem-marker-wrap { position: relative; display: flex; flex-direction: column; align-items: center; }
+        .modem-label {
+            background: rgba(15, 23, 42, 0.85); color: #fff; font-size: 10px;
+            padding: 1px 5px; border-radius: 4px; margin-bottom: 3px; white-space: nowrap;
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+        .modem-dot {
+            width: 16px; height: 16px; border-radius: 50%; border: 2.5px solid white;
+            box-shadow: 0 0 8px rgba(0,0,0,0.7);
+        }
+        .offline-pulse {
+            animation: offlineRing 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(0.95); opacity: 0.8; }
+            70% { transform: scale(1.2); opacity: 1; }
+            100% { transform: scale(0.95); opacity: 0.8; }
+        }
+        @keyframes offlineRing {
+            0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.8); }
+            70% { box-shadow: 0 0 0 12px rgba(239, 68, 68, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+    </style>
 </head>
 <body>
-	<div class="github-fork-ribbon-wrapper left">
-		<div class="github-fork-ribbon">
-			<a href="https://github.com/leaflet-extras/leaflet-providers">Fork me on GitHub</a>
-		</div>
-	</div>
-	<div id="map" class="map"></div>
 
-	<script src="https://unpkg.com/leaflet@latest/dist/leaflet.js"></script>
-	<script src="leaflet-providers.js"></script>
-	<script>
-		var map = L.map('map', {
-			center: [48, -3],
-			zoom: 5,
-			zoomControl: false
-		});
+    <!-- لوحة المراقبة العلوية -->
+    <div class="top-dashboard">
+        <div class="dash-header">
+            <span>شبكة المحيط نت الفضائية</span>
+            <div class="live-badge"><div class="live-dot"></div> مباشر</div>
+        </div>
+        <div class="counters-grid">
+            <div class="counter-box" id="filter-good" onclick="toggleFilter('good')" title="اضغط لفلترة المتصلين بإشارة جيدة">
+                <div class="counter-num" id="count-good" style="color: #22c55e;">0</div>
+                <div class="counter-label">جيد</div>
+            </div>
+            <div class="counter-box" id="filter-weak" onclick="toggleFilter('weak')" title="اضغط لفلترة الإشارة الضعيفة">
+                <div class="counter-num" id="count-weak" style="color: #eab308;">0</div>
+                <div class="counter-label">ضعيف</div>
+            </div>
+            <div class="counter-box" id="filter-offline" onclick="toggleFilter('offline')" title="اضغط لفلترة غير المتصلين">
+                <div class="counter-num" id="count-offline" style="color: #ef4444;">0</div>
+                <div class="counter-label">غير متصل</div>
+            </div>
+            <div class="counter-box" id="filter-nodata" onclick="toggleFilter('nodata')" title="اضغط لفلترة بلا بيانات">
+                <div class="counter-num" id="count-nodata" style="color: #94a3b8;">0</div>
+                <div class="counter-label">بلا بيانات</div>
+            </div>
+        </div>
+        <div class="search-box">
+            <input type="text" id="searchInput" class="search-input" placeholder="ابحث برقم أو اسم المودم (مثال: 18)..." oninput="handleSearch()">
+        </div>
+    </div>
 
-		var defaultLayer = L.tileLayer.provider('OpenStreetMap.Mapnik').addTo(map);
+    <!-- الخريطة -->
+    <div id="map"></div>
 
-		var baseLayers = {
-			'OpenStreetMap Default': defaultLayer,
-			'OpenStreetMap German Style': L.tileLayer.provider('OpenStreetMap.DE'),
-			'OpenStreetMap H.O.T.': L.tileLayer.provider('OpenStreetMap.HOT'),
-			'MapTilesAPI OpenStreetMap in English': L.tileLayer.provider('MapTilesAPI.OSMEnglish'),
-			'MapTilesAPI OpenStreetMap en Français': L.tileLayer.provider('MapTilesAPI.OSMFrancais'),
-			'MapTilesAPI OpenStreetMap en Español': L.tileLayer.provider('MapTilesAPI.OSMEspagnol'),
-			'Thunderforest OpenCycleMap': L.tileLayer.provider('Thunderforest.OpenCycleMap'),
-			'Thunderforest Transport': L.tileLayer.provider('Thunderforest.Transport'),
-			'Thunderforest Landscape': L.tileLayer.provider('Thunderforest.Landscape'),
-			'Stamen Toner': L.tileLayer.provider('Stadia.StamenToner'),
-			'Stamen Toner Lite': L.tileLayer.provider('Stadia.StamenTonerLite'),
-			'Stamen Toner Dark': L.tileLayer.provider('Stadia.StamenTonerDark'),
-			'Stamen Toner Blacklite': L.tileLayer.provider('Stadia.StamenTonerBlacklite'),
-			'Stamen Terrain': L.tileLayer.provider('Stadia.StamenTerrain'),
-			'Stamen Watercolor': L.tileLayer.provider('Stadia.StamenWatercolor'),
-			'Stadia Alidade Smooth': L.tileLayer.provider('Stadia.AlidadeSmooth'),
-			'Stadia Alidade Smooth Dark': L.tileLayer.provider('Stadia.AlidadeSmoothDark'),
-			'Stadia Alidade Satellite': L.tileLayer.provider('Stadia.AlidadeSatellite'),
-			'Stadia Outdoors': L.tileLayer.provider('Stadia.Outdoors'),
-			'Jawg Streets': L.tileLayer.provider('Jawg.Streets'),
-			'Jawg Terrain': L.tileLayer.provider('Jawg.Terrain'),
-			'Jawg Lagoon': L.tileLayer.provider('Jawg.Lagoon'),
-			'Jawg Sunny': L.tileLayer.provider('Jawg.Sunny'),
-			'Jawg Dark': L.tileLayer.provider('Jawg.Dark'),
-			'Jawg Light': L.tileLayer.provider('Jawg.Light'),
-			'Esri WorldStreetMap': L.tileLayer.provider('Esri.WorldStreetMap'),
-			'Esri WorldTopoMap': L.tileLayer.provider('Esri.WorldTopoMap'),
-			'Esri WorldImagery': L.tileLayer.provider('Esri.WorldImagery'),
-			'Esri WorldTerrain': L.tileLayer.provider('Esri.WorldTerrain'),
-			'Esri WorldShadedRelief': L.tileLayer.provider('Esri.WorldShadedRelief'),
-			'Esri WorldPhysical': L.tileLayer.provider('Esri.WorldPhysical'),
-			'Esri OceanBasemap': L.tileLayer.provider('Esri.OceanBasemap'),
-			'Esri NatGeoWorldMap': L.tileLayer.provider('Esri.NatGeoWorldMap'),
-			'Esri WorldGrayCanvas': L.tileLayer.provider('Esri.WorldGrayCanvas'),
-			'Geoportail France Maps': L.tileLayer.provider('GeoportailFrance'),
-			'Geoportail France Orthos': L.tileLayer.provider('GeoportailFrance.orthos'),
-			'USGS USTopo': L.tileLayer.provider('USGS.USTopo'),
-			'USGS USImagery': L.tileLayer.provider('USGS.USImagery'),
-			'USGS USImageryTopo': L.tileLayer.provider('USGS.USImageryTopo'),
-		};
+    <!-- إشعار التحديث -->
+    <div id="toast" class="toast">تم تحديث البيانات بنجاح</div>
 
-		var overlayLayers = {
-			'OpenSeaMap': L.tileLayer.provider('OpenSeaMap'),
-			'OpenWeatherMap Clouds': L.tileLayer.provider('OpenWeatherMap.Clouds'),
-			'OpenWeatherMap CloudsClassic': L.tileLayer.provider('OpenWeatherMap.CloudsClassic'),
-			'OpenWeatherMap Precipitation': L.tileLayer.provider('OpenWeatherMap.Precipitation'),
-			'OpenWeatherMap PrecipitationClassic': L.tileLayer.provider('OpenWeatherMap.PrecipitationClassic'),
-			'OpenWeatherMap Rain': L.tileLayer.provider('OpenWeatherMap.Rain'),
-			'OpenWeatherMap RainClassic': L.tileLayer.provider('OpenWeatherMap.RainClassic'),
-			'OpenWeatherMap Pressure': L.tileLayer.provider('OpenWeatherMap.Pressure'),
-			'OpenWeatherMap PressureContour': L.tileLayer.provider('OpenWeatherMap.PressureContour'),
-			'OpenWeatherMap Wind': L.tileLayer.provider('OpenWeatherMap.Wind'),
-			'OpenWeatherMap Temperature': L.tileLayer.provider('OpenWeatherMap.Temperature'),
-			'OpenWeatherMap Snow': L.tileLayer.provider('OpenWeatherMap.Snow'),
-			'Geoportail France Parcels': L.tileLayer.provider('GeoportailFrance.parcels'),
-			'Waymarked Trails Hiking': L.tileLayer.provider('WaymarkedTrails.hiking'),
-			'Waymarked Trails Cycling': L.tileLayer.provider('WaymarkedTrails.cycling'),
-			'Waymarked Trails MTB': L.tileLayer.provider('WaymarkedTrails.mtb'),
-			'Waymarked Trails Ski Slopes': L.tileLayer.provider('WaymarkedTrails.slopes'),
-			'Waymarked Trails Riding': L.tileLayer.provider('WaymarkedTrails.riding'),
-			'Waymarked Trails Skating': L.tileLayer.provider('WaymarkedTrails.skating')
-		};
+    <!-- لوحة التحكم السفلية -->
+    <div class="bottom-panel">
+        <button class="update-btn" id="updateBtn" onclick="updateMapData()">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.63-5.05"/></svg>
+            تحديث
+        </button>
+        <span class="footer-credit">إعداد: عبدالكريم المريسي</span>
+    </div>
 
-		L.control.layers(baseLayers, overlayLayers, {collapsed: false}).addTo(map);
+    <!-- مكتبة Leaflet -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        // 1. إنشاء الخريطة
+        var map = L.map('map', { zoomControl: false }).setView([15.3694, 44.1910], 14);
+        L.control.zoom({ position: 'topleft' }).addTo(map);
 
-		// resize layers control to fit into view.
-		function resizeLayerControl () {
-			var layerControlHeight = document.body.clientHeight - (10 + 50);
-			var layerControl = document.getElementsByClassName('leaflet-control-layers-expanded')[0];
+        // طبقة الأقمار الصناعية
+        L.tileLayer('https://{s}.google.com/vt/lyrs=s,h&x={x}&y={y}&z={z}', {
+            maxZoom: 20,
+            subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
+            attribution: 'Google Satellite'
+        }).addTo(map);
 
-			layerControl.style.overflowY = 'auto';
-			layerControl.style.maxHeight = layerControlHeight + 'px';
-		}
-		map.on('resize', resizeLayerControl);
-		resizeLayerControl();
-	</script>
+        // 2. بيانات المودمات (يمكنك استبدالها ببيانات السيرفر)
+        let modems = [
+            { id: "18", name: "مودم رقم 18", status: "good", ping: "58 ms", lat: 15.3720, lng: 44.1950, time: "5:31:38 م" },
+            { id: "19", name: "مودم رقم 19", status: "weak", ping: "140 ms", lat: 15.3650, lng: 44.1850, time: "5:31:30 م" },
+            { id: "20", name: "مودم رقم 20", status: "offline", ping: "---", lat: 15.3600, lng: 44.1900, time: "5:30:15 م" },
+            { id: "21", name: "مودم رقم 21", status: "nodata", ping: "---", lat: 15.3680, lng: 44.1980, time: "5:25:00 م" }
+        ];
+
+        let markersLayer = L.layerGroup().addTo(map);
+        let markersMap = {};
+        let currentFilter = 'all';
+
+        // 3. تحديث العدادات تلقائياً
+        function updateCounters() {
+            document.getElementById('count-good').innerText = modems.filter(m => m.status === 'good').length;
+            document.getElementById('count-weak').innerText = modems.filter(m => m.status === 'weak').length;
+            document.getElementById('count-offline').innerText = modems.filter(m => m.status === 'offline').length;
+            document.getElementById('count-nodata').innerText = modems.filter(m => m.status === 'nodata').length;
+        }
+
+        // 4. رسم المودمات على الخريطة
+        function renderMap() {
+            markersLayer.clearLayers();
+            markersMap = {};
+            const searchQuery = document.getElementById('searchInput').value.trim().toLowerCase();
+
+            modems.forEach(modem => {
+                // تطبيق الفلتر والبحث
+                if (currentFilter !== 'all' && modem.status !== currentFilter) return;
+                if (searchQuery && !modem.name.toLowerCase().includes(searchQuery) && !modem.id.includes(searchQuery)) return;
+
+                let color = '#94a3b8';
+                let statusText = 'بلا بيانات';
+                let pulseClass = '';
+
+                if (modem.status === 'good') { color = '#22c55e'; statusText = 'متصل - إشارة جيدة'; }
+                else if (modem.status === 'weak') { color = '#eab308'; statusText = 'متصل - إشارة ضعيفة'; }
+                else if (modem.status === 'offline') { color = '#ef4444'; statusText = 'غير متصل'; pulseClass = 'offline-pulse'; }
+
+                let icon = L.divIcon({
+                    className: 'custom-icon',
+                    html: `
+                        <div class="modem-marker-wrap">
+                            <span class="modem-label">${modem.id}</span>
+                            <div class="modem-dot ${pulseClass}" style="background-color: ${color};"></div>
+                        </div>
+                    `,
+                    iconSize: [40, 36],
+                    iconAnchor: [20, 28]
+                });
+
+                let marker = L.marker([modem.lat, modem.lng], { icon: icon })
+                    .bindPopup(`
+                        <div style="font-family: Tahoma; text-align: right; direction: rtl; color: #1e293b; min-width: 150px;">
+                            <b style="font-size: 14px; color: #0f172a;">${modem.name}</b><br>
+                            <hr style="margin: 5px 0; border: 0; border-top: 1px solid #e2e8f0;">
+                            الحالة: <span style="color:${color}; font-weight:bold;">● ${statusText}</span><br>
+                            زمن الاستجابة: <b>${modem.ping}</b><br>
+                            <span style="font-size: 11px; color: #64748b;">آخر فحص: ${modem.time}</span>
+                        </div>
+                    `);
+
+                markersLayer.addLayer(marker);
+                markersMap[modem.id] = marker;
+            });
+
+            updateCounters();
+        }
+
+        // 5. الفلترة عند الضغط على العدادات
+        function toggleFilter(status) {
+            document.querySelectorAll('.counter-box').forEach(el => el.classList.remove('active-filter'));
+            
+            if (currentFilter === status) {
+                currentFilter = 'all';
+            } else {
+                currentFilter = status;
+                document.getElementById('filter-' + status).classList.add('active-filter');
+            }
+            renderMap();
+        }
+
+        // 6. البحث والانتقال للمودم
+        function handleSearch() {
+            renderMap();
+            const q = document.getElementById('searchInput').value.trim();
+            if (q && markersMap[q]) {
+                const m = modems.find(item => item.id === q);
+                map.flyTo([m.lat, m.lng], 16);
+                markersMap[q].openPopup();
+            }
+        }
+
+        // 7. دالة التحديث (جاهزة للربط مع السيرفر)
+        async function updateMapData() {
+            const btn = document.getElementById('updateBtn');
+            btn.classList.add('spinning');
+
+            try {
+                // للربط الفعلي بسيرفرك، أزل التعليق عن السطرين التاليين وضع رابط الـ API:
+                // const response = await fetch('/api/modems');
+                // modems = await response.json();
+
+                renderMap();
+                showToast('تم تحديث حالة المودمات (' + new Date().toLocaleTimeString('ar-EG') + ')');
+            } catch (err) {
+                showToast('تعذر الاتصال بالسيرفر');
+            } finally {
+                setTimeout(() => btn.classList.remove('spinning'), 500);
+            }
+        }
+
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            toast.innerText = msg;
+            toast.classList.add('show');
+            setTimeout(() => toast.classList.remove('show'), 2500);
+        }
+
+        // التشغيل الأولي + تحديث تلقائي كل 30 ثانية
+        renderMap();
+        setInterval(updateMapData, 30000);
+    </script>
 </body>
-</html>
+		</html>
+		
