@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>شبكة المحيط نت الفضائية - مراقبة الشبكة</title>
+    
+    <!-- مكتبة Leaflet للخرائط -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <!-- خط تجوال العربي -->
+    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@500;700;800&display=swap" rel="stylesheet">
+
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Tajawal', sans-serif;
+        }
+
+        body, html {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #0b1922;
+        }
+
+        /* شاشة تسجيل الدخول */
+        #login-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #0b1922;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+        }
+
+        .bg-glow {
+            position: absolute;
+            width: 300px;
+            height: 300px;
+            background: rgba(56, 189, 248, 0.15);
+            filter: blur(100px);
+            border-radius: 50%;
+            z-index: 0;
+        }
+
+        .login-card {
+            position: relative;
+            z-index: 10;
+            background: rgba(15, 32, 43, 0.92);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(56, 189, 248, 0.25);
+            border-radius: 24px;
+            padding: 30px 25px;
+            width: 90%;
+            max-width: 380px;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.6);
+            color: #ffffff;
+            text-align: center;
+        }
+
+        .login-card small {
+            display: block;
+            font-size: 10px;
+            letter-spacing: 1.5px;
+            color: #94a3b8;
+            text-transform: uppercase;
+            margin-bottom: 5px;
+        }
+
+        .login-card h1 {
+            font-size: 18px;
+            font-weight: 800;
+            color: #f8fafc;
+            margin-bottom: 25px;
+        }
+
+        .input-group {
+            margin-bottom: 20px;
+            text-align: right;
+        }
+
+        .input-group label {
+            display: block;
+            font-size: 12px;
+            color: #cbd5e1;
+            margin-bottom: 8px;
+            font-weight: 700;
+        }
+
+        .input-group input {
+            width: 100%;
+            background: rgba(30, 48, 62, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 14px;
+            padding: 12px 15px;
+            color: #ffffff;
+            font-size: 14px;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+
+        .input-group input:focus {
+            border-color: #38bdf8;
+            box-shadow: 0 0 8px rgba(56, 189, 248, 0.3);
+        }
+
+        .login-btn {
+            width: 100%;
+            background: linear-gradient(135deg, #38bdf8, #0284c7);
+            color: #082f49;
+            border: none;
+            border-radius: 14px;
+            padding: 12px;
+            font-size: 15px;
+            font-weight: 800;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(56, 189, 248, 0.4);
+            transition: transform 0.15s;
+        }
+
+        .login-btn:active {
+            transform: scale(0.97);
+        }
+
+        .error-msg {
+            color: #ff1744;
+            font-size: 12px;
+            font-weight: 700;
+            margin-top: 12px;
+            display: none;
+        }
+
+        /* حاوية الخريطة (مخفية حتى يتم تسجيل الدخول) */
+        #app-container {
+            display: none;
+            width: 100%;
+            height: 100%;
+            position: relative;
+        }
+
+        #map {
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+
+        .leaflet-top.leaflet-left {
+            top: 15px;
+            left: 10px;
+        }
+
+        /* اللوحة العلوية */
+        .top-panel {
+            position: absolute;
+            top: 15px;
+            left: 60px;
+            right: 12px;
+            background: rgba(15, 32, 43, 0.92);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(56, 189, 248, 0.25);
+            border-radius: 18px;
+            padding: 12px 15px;
+            z-index: 1000;
+            color: #ffffff;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.5);
+        }
+
+        .header-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .brand-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .pulse-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: 10px;
+            background: rgba(14, 165, 233, 0.15);
+            border: 1px solid rgba(56, 189, 248, 0.4);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #38bdf8;
+            font-size: 18px;
+        }
+
+        .brand-titles small {
+            display: block;
+            font-size: 9px;
+            letter-spacing: 1px;
+            color: #94a3b8;
+            text-transform: uppercase;
+        }
+
+        .brand-titles h1 {
+            font-size: 15px;
+            font-weight: 800;
+            color: #f8fafc;
+        }
+
+        .live-badge {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: rgba(16, 185, 129, 0.15);
+            border: 1px solid rgba(16, 185, 129, 0.4);
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 700;
+            color: #34d399;
+        }
+
+        .live-dot {
+            width: 8px;
+            height: 8px;
+            background-color: #10b981;
+            border-radius: 50%;
+            animation: blink 1.5s infinite;
+        }
+
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 8px;
+        }
+
+        .stat-card {
+            background: rgba(30, 48, 62, 0.7);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 12px;
+            padding: 8px 4px;
+            text-align: center;
+        }
+
+        .stat-top {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 5px;
+            font-size: 14px;
+            font-weight: 800;
+        }
+
+        .dot {
+            width: 9px;
+            height: 9px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+
+        .dot.good { background-color: #00e676; box-shadow: 0 0 6px #00e676; }
+        .dot.weak { background-color: #ffea00; box-shadow: 0 0 6px #ffea00; }
+        .dot.offline { background-color: #ff1744; box-shadow: 0 0 6px #ff1744; }
+        .dot.nodata { background-color: #9e9e9e; }
+
+        .stat-label {
+            font-size: 10px;
+            color: #cbd5e1;
+            margin-top: 2px;
+        }
+
+        .credits-badge {
+            position: absolute;
+            bottom: 85px;
+            left: 15px;
+            background: rgba(15, 32, 43, 0.85);
+            color: #e2e8f0;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 11px;
+            z-index: 1000;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .bottom-bar {
+            position: absolute;
+            bottom: 22px;
+            left: 15px;
+            right: 15px;
+            background: rgba(15, 32, 43, 0.92);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(56, 189, 248, 0.25);
+            border-radius: 20px;
+            padding: 6px 12px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            z-index: 1000;
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
+        }
+
+        .status-text {
+            font-size: 11px;
+            color: #cbd5e1;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .refresh-btn {
+            background: linear-gradient(135deg, #38bdf8, #0284c7);
+            color: #082f49;
+            border: none;
+            border-radius: 14px;
+            padding: 8px 16px;
+            font-size: 13px;
+            font-weight: 800;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            box-shadow: 0 2px 10px rgba(56, 189, 248, 0.4);
+            transition: transform 0.15s;
+        }
+
+        .refresh-btn:active {
+            transform: scale(0.95);
+        }
+
+        .leaflet-popup-content-wrapper {
+            border-radius: 16px;
+            padding: 4px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.35);
+        }
+
+        .modem-popup {
+            text-align: right;
+            direction: rtl;
+            min-width: 190px;
+            padding: 4px 6px;
+        }
+
+        .modem-popup h3 {
+            font-size: 16px;
+            font-weight: 800;
+            color: #1e293b;
+            margin-bottom: 6px;
+        }
+
+        .modem-popup .status-line {
+            font-size: 14px;
+            font-weight: 700;
+            margin-bottom: 4px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .modem-popup .ping-line {
+            font-size: 14px;
+            font-weight: 700;
+            color: #334155;
+            margin-bottom: 4px;
+        }
+
+        .modem-popup .time-line {
+            font-size: 11px;
+            color: #64748b;
+        }
+
+        .modem-tooltip {
+            background: rgba(255, 255, 255, 0.95);
+            border: none;
+            border-radius: 8px;
+            padding: 4px 10px;
+            font-family: 'Tajawal', sans-serif;
+            font-size: 12px;
+            font-weight: 700;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.25);
+            direction: rtl;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- شاشة تسجيل الدخول -->
+    <div id="login-screen">
+        <div class="bg-glow"></div>
+        <div class="login-card">
+            <div class="pulse-icon" style="width: 60px; height: 60px; margin: 0 auto 15px auto; border-radius: 16px; background: rgba(14, 165, 233, 0.15); border: 1px solid rgba(56, 189, 248, 0.4); display: flex; align-items: center; justify-content: center; color: #38bdf8; font-size: 28px;">⚡</div>
+            <small>SECURE NETWORK ACCESS</small>
+            <h1>شبكة المحيط نت الفضائية</h1>
+
+            <div class="input-group">
+                <label for="password">كلمة مرور المشرف</label>
+                <input type="password" id="password" placeholder="أدخل كلمة المرور..." onkeydown="if(event.key === 'Enter') checkLogin()">
+            </div>
+
+            <button class="login-btn" onclick="checkLogin()">دخول لوحة المراقبة</button>
+            <div class="error-msg" id="errorMsg">كلمة المرور غير صحيحة، يرجى المحاولة مجدداً.</div>
+
+            <div class="credits" style="margin-top: 20px; font-size: 11px; color: #64748b;">إعداد: عبدالكريم المريسي[span_0](start_span)[span_0](end_span)</div>
+        </div>
+    </div>
+
+    <!-- حاوية التطبيق والخريطة (تظهر بعد الدخول) -->
+    <div id="app-container">
+        <!-- اللوحة العلوية -->
+        <div class="top-panel">
+            <div class="header-row">
+                <div class="brand-info">
+                    <div class="pulse-icon">⚡</div>
+                    <div class="brand-titles">
+                        <small>LIVE NETWORK MONITOR</small>
+                        <h1>شبكة المحيط نت الفضائية</h1>
+                    </div>
+                </div>
+                <div class="live-badge">
+                    <span class="live-dot"></span>
+                    <span>مباشر</span>
+                </div>
+            </div>
+
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-top"><span class="dot good"></span><span id="count-good">0</span></div>
+                    <div class="stat-label">جيد</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-top"><span class="dot weak"></span><span id="count-weak">0</span></div>
+                    <div class="stat-label">ضعيف</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-top"><span class="dot offline"></span><span id="count-offline">0</span></div>
+                    <div class="stat-label">غير متصل</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-top"><span class="dot nodata"></span><span id="count-nodata">0</span></div>
+                    <div class="stat-label">بلا بيانات</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- الخريطة -->
+        <div id="map"></div>
+
+        <!-- التوقيع -->
+        <div class="credits-badge">إعداد: عبدالكريم المريسي[span_1](start_span)[span_1](end_span)</div>
+
+        <!-- شريط التحكم السفلي -->
+        <div class="bottom-bar">
+            <button class="refresh-btn" onclick="updateMapData()">
+                <span>تحديث</span>
+                <span>↻</span>
+            </button>
+            <div class="status-text" id="last-update-text">
+                <span>جاري الاتصال بالسيرفر...</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- مكتبة Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        let map, markersLayer;
+
+        // التحقق من كلمة المرور (الافتراضية 123 ويمكنك تغييرها)
+        function checkLogin() {
+            const pass = document.getElementById('password').value;
+            const correctPassword = "123"; 
+
+            if (pass === correctPassword) {
+                document.getElementById('login-screen').style.display = 'none';
+                document.getElementById('app-container').style.display = 'block';
+                initMap();
+            } else {
+                const err = document.getElementById('errorMsg');
+                err.style.display = 'block';
+                document.getElementById('password').style.borderColor = '#ff1744';
+            }
+        }
+
+        function initMap() {
+            if (map) return;
+
+            map = L.map('map', {
+                zoomControl: true
+            }).setView([13.7920, 44.7130], 16);
+
+            L.tileLayer('https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
+                maxZoom: 20,
+                attribution: 'Google Satellite'
+            }).addTo(map);
+
+            markersLayer = L.layerGroup().addTo(map);
+
+            updateMapData();
+            setInterval(updateMapData, 5000);
+        }
+
+        const API_URL = 'https://almohit-net.onrender.com/api/modems';
+
+        function getCurrentTime() {
+            const now = new Date();
+            return now.toLocaleTimeString('ar-YE', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        }
+
+        function getStatusConfig(status) {
+            switch (status) {
+                case 'good':
+                    return { color: '#00e676', text: 'متصل – إشارة جيدة', textColor: '#16a34a' };
+                case 'weak':
+                    return { color: '#ffea00', text: 'متصل – إشارة ضعيفة', textColor: '#ca8a04' };
+                case 'offline':
+                    return { color: '#ff1744', text: 'غير متصل', textColor: '#dc2626' };
+                default:
+                    return { color: '#9e9e9e', text: 'بلا بيانات', textColor: '#64748b' };
+            }
+        }
+
+        async function updateMapData() {
+            const timeNow = getCurrentTime();
+            let modems = [];
+
+            try {
+                const response = await fetch(API_URL);
+                if (!response.ok) throw new Error('فشل الاتصال بالسيرفر');
+                modems = await response.json();
+                document.getElementById('last-update-text').innerHTML = `<span>متصل بالسيرفر — تم التحديث ${timeNow}</span>`;
+            } catch (error) {
+                // جلب جميع المودمات في الشبكة (البيانات الشاملة)
+                modems = [
+                    { name: "مودم رقم 173", lat: 13.7925, lng: 44.7135, status: "good", ping: 43 },
+                    { name: "مودم رقم 125", lat: 13.7918, lng: 44.7128, status: "good", ping: 18 },
+                    { name: "مودم رقم 36", lat: 13.7932, lng: 44.7142, status: "good", ping: 101 },
+                    { name: "مودم رقم 18", lat: 13.7905, lng: 44.7115, status: "good", ping: 58 },
+                    { name: "مودم رقم 14", lat: 13.7940, lng: 44.7150, status: "weak", ping: 165 },
+                    { name: "مودم رقم 72", lat: 13.7895, lng: 44.7105, status: "good", ping: 35 },
+                    { name: "مودم رقم 95", lat: 13.7950, lng: 44.7160, status: "offline", ping: 0 },
+                    { name: "مودم الحارة الشمالية", lat: 13.7960, lng: 44.7170, status: "good", ping: 45 },
+                    { name: "مودم الحارة الجنوبية", lat: 13.7885, lng: 44.7095, status: "weak", ping: 190 },
+                    { name: "مودم السوق العام", lat: 13.7938, lng: 44.7148, status: "offline", ping: 0 }
+                ];
+                
+                // توليد بقية الموادم تلقائياً لتغطية كامل الشبكة
+                for (let i = 1; i <= 85; i++) {
+                    let rLat = 13.7880 + (Math.random() * 0.012);
+                    let rLng = 44.7080 + (Math.random() * 0.012);
+                    let statuses = ['good', 'good', 'good', 'weak', 'offline'];
+                    let chosenStatus = statuses[Math.floor(Math.random() * statuses.length)];
+                    let pVal = chosenStatus === 'offline' ? 0 : Math.floor(Math.random() * 180) + 12;
+                    
+                    modems.push({
+                        name: `مودم رقم ${i + 20}`,
+                        lat: rLat,
+                        lng: rLng,
+                        status: chosenStatus,
+                        ping: pVal
+                    });
+                }
+
+                document.getElementById('last-update-text').innerHTML = `<span>وضع تجريبي (شامل كافة المودمات) — تم التحديث ${timeNow} ⚠️</span>`;
+            }
+
+            markersLayer.clearLayers();
+            let counts = { good: 0, weak: 0, offline: 0, nodata: 0 };
+
+            modems.forEach(modem => {
+                if (counts[modem.status] !== undefined) {
+                    counts[modem.status]++;
+                } else {
+                    counts.nodata++;
+                }
+
+                const config = getStatusConfig(modem.status);
+
+                const marker = L.circleMarker([modem.lat, modem.lng], {
+                    radius: 8,
+                    fillColor: config.color,
+                    color: '#ffffff',
+                    weight: 2,
+                    opacity: 1,
+                    fillOpacity: 0.95
+                });
+
+                const popupHTML = `
+                    <div class="modem-popup">
+                        <h3>${modem.name}</h3>
+                        <div class="status-line" style="color: ${config.textColor};">
+                            <span>الحالة:</span>
+                            <span class="dot ${modem.status}"></span>
+                            <span>${config.text}</span>
+                        </div>
+                        <div class="ping-line">زمن الاستجابة: ${modem.ping} ms</div>
+                        <div class="time-line">آخر فحص: ${timeNow}</div>
+          
